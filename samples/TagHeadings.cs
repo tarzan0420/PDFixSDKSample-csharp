@@ -35,6 +35,10 @@ namespace PDFix.App.Module
 
                 // check if this text page object has the same mcid
                 PdsContentMark content_mark = page_object.GetContentMark();
+
+                var tag_magicId = content_mark.GetTagMcid();
+                Console.WriteLine("tag_magicId : ", tag_magicId);
+
                 if (content_mark != null && content_mark.GetTagMcid() == mcid)
                 {
                     PdfTextState ts = text.GetTextState(page_object.GetPage().GetDoc());
@@ -72,9 +76,17 @@ namespace PDFix.App.Module
 
                     // find text object with mcid on the page to get the text state
                     int mcid = struct_elem.GetKidMcid(i);
+                    var num_pages = page.GetNumPageObjects();
+
                     for (int j = 0; j < page.GetNumPageObjects(); j++)
                     {
                         var ts = GetPageObjectTextState(page.GetPageObject(j), mcid);
+
+
+                        // Handled by MIkhaylov KS
+                        if (ts.font_size == 0)
+                            continue;
+
                         page.Release();
                         return ts;
                     }
@@ -91,34 +103,70 @@ namespace PDFix.App.Module
         static void TagParagraphAsHeading(PdsStructElement struct_elem)
         {
             string type = struct_elem.GetType_(true);
-            if (type == "P") {
+            // if (type == "P") {
                 // get the paragraph text_state
                 PdfTextState ts = GetParagraphTextState(struct_elem);
 
                 // get the font name
-                string font_name = ts.font != null ? ts.font.GetFontName() : "";
+                //string font_name = ts.font != null ? ts.font.GetFontName() : "";
                 string tag_type = "";
-                if (font_name.Contains("Black") && ts.font_size >= 25)
+
+
+                //if (font_name.Contains("Black") && ts.font_size >= 25)
+                //    tag_type = "H1";
+                //else if (font_name.Contains("Bold") && ts.font_size >= 16)
+                //    tag_type = "H2";
+
+                Console.WriteLine("Before replacing..");
+
+                if (ts.font_size >= 14)
+                {
                     tag_type = "H1";
-                else if (font_name.Contains("Bold") && ts.font_size >= 16)
+                    Console.WriteLine("Replacing paragraph with Heading 1");
+                }
+
+                else if (ts.font_size >= 12)
+                {
                     tag_type = "H2";
+                    Console.WriteLine("Replacing paragraph with Heading 2");
+                }
+
+                else if (ts.font_size >= 6)
+                {
+                    tag_type = "H3";
+                    Console.WriteLine("Replacing paragraph with Heading 2");
+                }
+
 
                 // update tag type
                 if (tag_type.Length != 0)
                 {
                     struct_elem.SetType(tag_type);
                 }
-                return; // this was a P tag, no need to continue to kid struct elements
-            }
+                // return; // this was a P tag, no need to continue to kid struct elements
+            //}
+
             // search kid struct elements
             for (int i = 0; i < struct_elem.GetNumKids(); i++)
             {
+                string actualText = struct_elem.GetActualText();
+
                 if (struct_elem.GetKidType(i) == PdfStructElementType.kPdsStructKidElement)
                 {
                     PdsObject kid_obj = struct_elem.GetKidObject(i);
                     PdsStructElement kid_elem = struct_elem.GetStructTree().AcquireStructElement(kid_obj);
+
                     TagParagraphAsHeading(kid_elem);
                     kid_elem.Release();
+                }
+                else if (struct_elem.GetKidType(i) == PdfStructElementType.kPdsStructKidPageContent)
+                {
+                    PdfTextState textState = GetParagraphTextState(struct_elem);
+
+                    //PdsObject kid_obj = 
+                    //PdsStructElement kid_elem = struct_elem.GetStructTree().AcquireStructElement(kid_obj);
+                    //var element_text = kid_elem.GetActualText();
+
                 }
             }
         }
